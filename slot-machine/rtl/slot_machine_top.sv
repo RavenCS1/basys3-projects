@@ -1,9 +1,9 @@
 // ============================================================
-//  slot_machine_top_v2.sv  --  refactored top-level
-//  Uses separate modules: debounce, seg7_ctrl
-//  Basys3 Artix-7, 100 MHz clock
+//  slot_machine_top.sv  –  slot machine (7-seg), top module
+//  Używa osobnych modułów: debounce, seg7_ctrl
+//  Basys3 Artix-7, clk 100 MHz
 // ============================================================
-module slot_machine_top_v2 (
+module slot_machine_top (
     input  logic        clk,
     input  logic        btnC,
     input  logic        btnU,
@@ -14,10 +14,10 @@ module slot_machine_top_v2 (
     output logic [15:0] led
 );
 
-// Constants
+// ── Stałe ────────────────────────────────────────────────────
 localparam CLK_HZ = 100_000_000;
 
-// 1 ms tick generator
+// ── Tik 1 ms ─────────────────────────────────────────────────
 logic [16:0] ms_cnt;
 logic        ms_tick;
 always_ff @(posedge clk) begin
@@ -26,7 +26,7 @@ always_ff @(posedge clk) begin
     else begin ms_cnt <= ms_cnt + 1; ms_tick <= 0; end
 end
 
-// Debounce
+// ── Debounce ─────────────────────────────────────────────────
 logic btn_clean, btn_pulse;
 debounce #(.CLK_HZ(CLK_HZ), .DEBOUNCE_MS(10)) u_deb (
     .clk      (clk),
@@ -36,7 +36,7 @@ debounce #(.CLK_HZ(CLK_HZ), .DEBOUNCE_MS(10)) u_deb (
     .btn_pulse(btn_pulse)
 );
 
-// Three independent LFSRs for reel randomness
+// ── LFSR × 3 ─────────────────────────────────────────────────
 logic [16:0] lfsr0, lfsr1, lfsr2;
 always_ff @(posedge clk) begin
     if (btnU) begin
@@ -50,12 +50,11 @@ always_ff @(posedge clk) begin
     end
 end
 
-// Map raw 3-bit LFSR output to symbol range 0-6
 function automatic logic [2:0] lfsr_sym (input logic [2:0] raw);
     return (raw > 3'd6) ? (raw - 3'd7) : raw;
 endfunction
 
-// FSM
+// ── FSM ──────────────────────────────────────────────────────
 typedef enum logic [2:0] {
     S_IDLE   = 3'd0,
     S_SPIN   = 3'd1,
@@ -121,7 +120,7 @@ always_ff @(posedge clk) begin
     end
 end
 
-// Live symbols shown during SPIN (driven by live LFSR)
+// Symbole "w locie" podczas SPIN
 always_comb begin
     for (int i=0; i<3; i++)
         spin_sym[i] = (state == S_SPIN)
@@ -129,7 +128,7 @@ always_comb begin
                     : reel[i];
 end
 
-// Fire LFSR and LED patterns
+// ── Fire LFSR + wzorce LED ────────────────────────────────────
 logic [15:0] fire_lfsr;
 logic [4:0]  fire_phase;
 
@@ -153,7 +152,7 @@ always_comb begin
     endcase
 end
 
-// 7-segment display driver
+// ── 7-seg ─────────────────────────────────────────────────────
 seg7_ctrl #(.CLK_HZ(CLK_HZ)) u_seg (
     .clk       (clk),
     .rst       (btnU),
